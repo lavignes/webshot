@@ -7,8 +7,9 @@ void goto_back(GtkToolButton*, gpointer);
 void goto_forward(GtkToolButton*, gpointer);
 void load_status(WebKitWebView*, gpointer);
 void webshot(gchar*, gint, gint);
+void enable_plugin(gpointer, gpointer);
 gboolean console_message(WebKitWebView*, gchar*, gint, gchar*, gpointer);
-gboolean progress_update(gpointer);
+void progress_update(WebKitWebView*, gpointer);
 
 void take_snapshot(GtkToolButton*, gpointer);
 
@@ -65,10 +66,19 @@ gint main(gint argc, gchar** argv) {
 
   g_signal_connect(urlbar, "activate", G_CALLBACK(goto_address), NULL);
   g_signal_connect(view, "notify::load-status", G_CALLBACK(load_status), NULL);
-  g_signal_connect(view, "console-message", G_CALLBACK(console_message), NULL);
+  g_signal_connect(view, "notify::progress", G_CALLBACK(progress_update), NULL);
+
   g_signal_connect(backbutton, "clicked", G_CALLBACK(goto_back), NULL);
   g_signal_connect(forwardbutton, "clicked", G_CALLBACK(goto_forward), NULL);
   g_signal_connect(snapbutton, "clicked", G_CALLBACK(take_snapshot), NULL);
+
+  // Enable some plugins, yo
+  WebKitWebPluginDatabase* database = webkit_get_web_plugin_database();
+  GSList* plugin_list = webkit_web_plugin_database_get_plugins(database);
+
+  g_slist_foreach(plugin_list, enable_plugin, NULL);
+
+  webkit_web_plugin_database_plugins_list_free(plugin_list);
 
   gtk_widget_show_all(window);
 
@@ -114,7 +124,8 @@ void load_status(WebKitWebView* view, gpointer data) {
 
     // The page is about to load
     case WEBKIT_LOAD_COMMITTED:
-      g_timeout_add(100, progress_update, NULL);
+      //g_timeout_add(100, progress_update, NULL);
+      g_message("load commited: %s\n", webkit_web_view_get_uri(view));
       gtk_entry_set_text(GTK_ENTRY(urlbar), webkit_web_view_get_uri(view));
     break;
 
@@ -133,16 +144,14 @@ void load_status(WebKitWebView* view, gpointer data) {
   }
 }
 
-gboolean progress_update(gpointer data) {
+void progress_update(WebKitWebView* view, gpointer data) {
 
-  gdouble progress = webkit_web_view_get_progress(WEBKIT_WEB_VIEW(view));
+  gdouble progress = webkit_web_view_get_progress(view);
 
-  gtk_entry_set_progress_fraction(GTK_ENTRY(urlbar), progress);
-
-  if (progress == 1.0)
-    return false;
-
-  return true;
+  if (progress < 1.0)
+    gtk_entry_set_progress_fraction(GTK_ENTRY(urlbar), progress);
+  else
+    gtk_entry_set_progress_fraction(GTK_ENTRY(urlbar), 0.0);
 }
 
 void take_snapshot(GtkToolButton* snapbutton, gpointer data) {
@@ -210,12 +219,6 @@ void take_snapshot(GtkToolButton* snapbutton, gpointer data) {
   gtk_widget_destroy(snap_dialog);
 }
 
-gboolean console_message(WebKitWebView* view, gchar* message,
-                         gint line, gchar* source_id, gpointer data) {
-  webkit_web_view_stop_loading(view);
-  return FALSE;
-}
-
 void webshot(gchar* path, gint width, gint height) {
 
   GtkAllocation allocation;
@@ -236,9 +239,6 @@ void webshot(gchar* path, gint width, gint height) {
   else
     cairo_scale(cr, scalex, scaley);
 
-  // Draw main window
-  //WebKitWebFrame* frame = webkit_web_view_get_main_frame(WEBKIT_WEB_VIEW(view));
-
   cairo_set_antialias(cr, CAIRO_ANTIALIAS_SUBPIXEL);
   gtk_widget_draw(scrollbars, cr);
   cairo_restore(cr);
@@ -247,4 +247,14 @@ void webshot(gchar* path, gint width, gint height) {
 
   cairo_destroy(cr);
   cairo_surface_destroy(surface);
+}
+
+void enable_plugin(gpointer plugin, gpointer data) {
+
+  g_message("Enabling plugin: %s\n\t%s\n",
+    webkit_web_plugin_get_name(WEBKIT_WEB_PLUGIN(plugin)),
+    webkit_web_plugin_get_path(WEBKIT_WEB_PLUGIN(plugin))
+  );
+
+  webkit_web_plugin_set_enabled(WEBKIT_WEB_PLUGIN(plugin), TRUE);
 }
