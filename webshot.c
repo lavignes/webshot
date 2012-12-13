@@ -37,6 +37,7 @@ gint main(gint argc, gchar** argv) {
   GtkToolItem* urltoolitem = gtk_tool_item_new();
   gtk_tool_item_set_expand(urltoolitem, TRUE);
   urlbar = gtk_entry_new();
+  gtk_entry_set_has_frame(urlbar, TRUE);
 
   backbutton = gtk_tool_button_new_from_stock(GTK_STOCK_GO_BACK);
   gtk_widget_set_sensitive(GTK_WIDGET(backbutton), FALSE);
